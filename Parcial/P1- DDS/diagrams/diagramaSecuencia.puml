@@ -1,0 +1,41 @@
+@startuml
+title "Parcial Mendoza - Diagrama de Secuencia"
+
+actor Main as "main.py"
+
+participant FincaBuilder as "builder:FincaBuilder"
+participant Finca as "finca:Finca"
+participant INV as "inv:INV"
+participant Contratista as "contratista:Contratista"
+participant Estrategia as "estrategia:Estrategia"
+
+Main -> INV : getInstance()
+activate INV
+deactivate INV
+
+Main -> FincaBuilder : new(50)
+Main -> FincaBuilder : build()
+activate FincaBuilder
+    FincaBuilder -> Finca : new(builder)
+    FincaBuilder --> Main : finca_lujan
+deactivate FincaBuilder
+
+Main -> Finca : attach(inv)
+
+Main -> Contratista : new("Pérez")
+
+== Contratista realiza cosecha con estrategia Manual ==
+Main -> Contratista : ejecutar_cosecha(finca_lujan)
+activate Contratista
+    Contratista -> Estrategia : cosechar_finca(contratista, finca)
+    activate Estrategia
+        Estrategia -> Finca : cosechar()
+        activate Finca
+            Finca -> Finca : notify()
+            Finca -> INV : update(self)
+            activate INV
+            deactivate INV
+        deactivate Finca
+    deactivate Estrategia
+deactivate Contratista
+@enduml

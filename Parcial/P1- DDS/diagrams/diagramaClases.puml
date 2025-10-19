@@ -1,0 +1,67 @@
+@startuml
+skinparam classAttributeIconSize 0
+title "Parcial Mendoza - Diagrama de Clases"
+
+package "Entidades" {
+  package "Cultivos" {
+    abstract class Vid {
+      +get_varietal()
+    }
+    class Malbec extends Vid
+    class CabernetSauvignon extends Vid
+  }
+
+  package "Terrenos" {
+    class Finca extends Subject {
+      +nombre
+      +hectareas
+      +cosechar()
+    }
+  }
+
+  package "Organizacion" {
+    class INV implements Observer {
+      - {static} _instance
+      + {static} getInstance()
+      + update(subject)
+    }
+  }
+}
+
+package "Servicios" {
+  package "Creacion" {
+    class VidFactory {
+      +crear_vid(varietal)
+    }
+    class FincaBuilder {
+      +build()
+    }
+  }
+
+  package "Personal" {
+    class Contratista {
+      - estrategia: EstrategiaCosecha
+      + set_estrategia()
+      + ejecutar_cosecha()
+    }
+  }
+
+  package "Negocio" {
+    interface EstrategiaCosecha {
+      +cosechar_finca()
+    }
+    class CosechaManual implements EstrategiaCosecha
+    class CosechaMecanica implements EstrategiaCosecha
+  }
+}
+
+' --- Relaciones entre paquetes ---
+Servicios.Creacion.VidFactory ..> Entidades.Cultivos.Vid : <<crea>>
+Servicios.Creacion.FincaBuilder ..> Entidades.Terrenos.Finca : <<crea>>
+
+Servicios.Personal.Contratista o-- "1" Servicios.Negocio.EstrategiaCosecha
+Servicios.Personal.Contratista ..> Entidades.Terrenos.Finca : <<usa>>
+
+Entidades.Terrenos.Finca o-- "*" Entidades.Cultivos.Vid : <<contiene>>
+Entidades.Terrenos.Finca o-- "*" Entidades.Organizacion.Observer : <<notifica>>
+@enduml
