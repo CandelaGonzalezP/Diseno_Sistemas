@@ -1,0 +1,488 @@
+@startuml diagramaSecuenciaPython
+title Diagrama de Secuencia - Sistema PythonForestal\nFlujo Principal de Operaciones
+
+' Actores y Participantes
+actor Usuario
+participant "Main" as Main
+participant ":TierraService" as TierraServ
+participant ":PlantacionService" as PlantServ
+participant ":CultivoServiceRegistry" as Registry
+participant ":PinoService" as PinoServ
+participant ":Tierra" as Tierra
+participant ":Plantacion" as Plantacion
+participant ":RegistroForestal" as Registro
+participant ":TrabajadorService" as TrabServ
+participant ":Trabajador" as Trabajador
+participant ":FincasService" as FincasServ
+participant ":RegistroForestalService" as RegServ
+participant ":TemperaturaReaderTask" as TempTask
+participant ":HumedadReaderTask" as HumTask
+participant ":ControlRiegoTask" as ControlTask
+
+autonumber
+
+' ===== FASE 1: INICIALIZACIÓN DE SERVICIOS =====
+group #LightBlue Inicialización de Servicios (Singleton + Dependency Injection)
+    Usuario -> Main: ejecutar programa
+    activate Main
+    
+    Main -> Registry: CultivoServiceRegistry()
+    activate Registry
+    note right of Registry
+        <b>Singleton Pattern</b>
+        Thread-safe con Lock
+        Inicialización única
+    end note
+    Registry -> PinoServ: new PinoService()
+    activate PinoServ
+    return pinoService
+    Registry -> Registry: _inicializar_servicios()
+    note right
+        Registra handlers en Maps:
+        - absorber_agua_handlers
+        - mostrar_datos_handlers
+        Elimina isinstance()
+    end note
+    return registry (instancia única)
+    
+    Main -> PlantServ: new PlantacionService(registry)
+    activate PlantServ
+    return plantacionService
+    
+    Main -> TrabServ: new TrabajadorService()
+    activate TrabServ
+    return trabajadorService
+    
+    Main -> FincasServ: new FincasService(plantacionService, registry)
+    activate FincasServ
+    return fincasService
+    
+    Main -> RegServ: new RegistroForestalService(registry)
+    activate RegServ
+    return registroService
+end
+
+' ===== FASE 2: CREAR TIERRA Y PLANTACIÓN =====
+group #LightGreen Crear Tierra y Plantación
+    Main -> TierraServ: crear_tierra_con_plantacion(1, 10000.0, "Agrelo", "Finca del Madero")
+    activate TierraServ
+    
+    TierraServ -> Tierra: new Tierra(1, 10000.0, "Agrelo")
+    activate Tierra
+    return tierra
+    
+    TierraServ -> Plantacion: new Plantacion("Finca del Madero", 10000.0, 500)
+    activate Plantacion
+    return plantacion
+    
+    TierraServ -> Tierra: set_finca(plantacion)
+    activate Tierra
+    return
+    
+    TierraServ -> Plantacion: set_tierra(tierra)
+    activate Plantacion
+    return
+    
+    return tierra
+    
+    Main -> Tierra: get_finca()
+    activate Tierra
+    return plantacion
+end
+
+' ===== FASE 3: CREAR REGISTRO FORESTAL =====
+group #LightYellow Crear Registro Forestal
+    Main -> Registro: new RegistroForestal(1, tierra, plantacion, "Juan Perez", 50309233.55)
+    activate Registro
+    return registro
+end
+
+' ===== FASE 4: PLANTAR CULTIVOS =====
+group #LightCyan Plantar Cultivos con Factory Method
+    Main -> PlantServ: plantar(plantacion, "Pino", 5)
+    activate PlantServ
+    
+    loop 5 veces
+        PlantServ -> PlantServ: _crear_cultivo("Pino")
+        note right
+            <b>Factory Method Pattern</b>
+            CultivoFactory.crear_cultivo()
+            Retorna tipo base Cultivo
+        end note
+        
+        PlantServ -> PlantServ: validar superficie disponible
+        
+        alt superficie suficiente
+            PlantServ -> Plantacion: get_cultivos_interno().append(pino)
+            activate Plantacion
+            return
+            PlantServ --> Main: cultivo plantado
+        else superficie insuficiente
+            PlantServ --> Main: raise SuperficieInsuficienteException
+            note right
+                Excepción con detalles:
+                - tipo_cultivo
+                - superficie_requerida
+                - superficie_disponible
+            end note
+        end
+    end
+    return True
+    
+    Main -> PlantServ: plantar(plantacion, "Olivo", 5)
+    activate PlantServ
+    return True
+    
+    Main -> PlantServ: plantar(plantacion, "Lechuga", 5)
+    activate PlantServ
+    return True
+    
+    Main -> PlantServ: plantar(plantacion, "Zanahoria", 5)
+    activate PlantServ
+    return True
+end
+
+' ===== FASE 5: SISTEMA DE RIEGO AUTOMATIZADO =====
+group #Lavender Sistema de Riego Concurrente (3 Threads + Observer Pattern)
+    Main -> TempTask: new TemperaturaReaderTask()
+    activate TempTask
+    note right of TempTask
+        <b>Observer Pattern</b>
+        Observable[float]
+        Thread daemon
+    end note
+    return tareaTemp
+    
+    Main -> HumTask: new HumedadReaderTask()
+    activate HumTask
+    note right of HumTask
+        Observable[float]
+        Thread daemon
+    end note
+    return tareaHum
+    
+    Main -> ControlTask: new ControlRiegoTask(tareaTemp, tareaHum, plantacion, plantacionService)
+    activate ControlTask
+    note right of ControlTask
+        <b>Dependency Injection</b>
+        Observer[float]
+        Inyecta sensores y servicios
+    end note
+    return tareaControl
+    
+    Main -> TempTask: start()
+    activate TempTask
+    note right
+        Thread 1: Lee temperatura
+        cada 2 segundos
+        Notifica a observadores
+    end note
+    return
+    
+    Main -> HumTask: start()
+    activate HumTask
+    note right
+        Thread 2: Lee humedad
+        cada 3 segundos
+        Notifica a observadores
+    end note
+    return
+    
+    Main -> ControlTask: start()
+    activate ControlTask
+    note right
+        Thread 3: Control de riego
+        cada 2.5 segundos
+    end note
+    
+    loop mientras ejecutando
+        TempTask -> ControlTask: actualizar(temperatura)
+        note right: Observer.actualizar()
+        HumTask -> ControlTask: actualizar(humedad)
+        
+        alt condiciones óptimas (8°C <= temp <= 15°C && hum < 50%)
+            ControlTask -> PlantServ: regar(plantacion)
+            activate PlantServ
+            
+            loop por cada cultivo
+                PlantServ -> Registry: absorber_agua(cultivo)
+                activate Registry
+                note right
+                    <b>Registry Pattern</b>
+                    Dispatch polimórfico
+                    Sin isinstance()
+                end note
+                
+                Registry -> PinoServ: absorver_agua(pino)
+                activate PinoServ
+                note right
+                    <b>Strategy Pattern</b>
+                    AbsorcionSeasonalStrategy
+                    5L verano / 2L invierno
+                end note
+                PinoServ -> Plantacion: cultivo.set_agua(...)
+                activate Plantacion
+                return
+                return agua_absorvida
+                return agua_absorvida
+                
+                PlantServ -> Plantacion: set_agua_disponible(agua_actual - agua_absorvida)
+                activate Plantacion
+                return
+            end
+            
+            alt agua disponible < 10L
+                PlantServ --> ControlTask: raise AguaAgotadaException
+                note right
+                    Excepción con detalles:
+                    - agua_disponible
+                    - agua_minima (10L)
+                end note
+                ControlTask -> ControlTask: detener sistema de riego
+            else agua suficiente
+                return True
+            end
+        end
+        
+        ControlTask -> ControlTask: sleep(2.5s)
+    end
+    return
+end
+
+' ===== FASE 6: GESTIÓN DE TRABAJADORES =====
+group #LightPink Gestión de Trabajadores
+    Main -> Trabajador: new Trabajador(43888734, "Juan Perez", tareas)
+    activate Trabajador
+    note right of Trabajador
+        AptoMedico se crea
+        automáticamente:
+        apto=False inicialmente
+    end note
+    return trabajador
+    
+    Main -> Plantacion: set_trabajadores([trabajador])
+    activate Plantacion
+    note right: Defensive copy (inmutable)
+    return
+    
+    Main -> TrabServ: asignar_apto_medico(trabajador, True, date.today(), "Estado: excelente")
+    activate TrabServ
+    TrabServ -> Trabajador: asignar_apto_medico(True, fecha, observaciones)
+    activate Trabajador
+    Trabajador -> Trabajador: new AptoMedico(True, fecha, obs)
+    note right
+        AptoMedico como
+        clase independiente
+    end note
+    return
+    return
+    
+    Main -> TrabServ: trabajar(trabajador, date.today(), pala)
+    activate TrabServ
+    TrabServ -> Trabajador: get_apto_medico()
+    activate Trabajador
+    return aptoMedico
+    
+    TrabServ -> Trabajador: aptoMedico.esta_apto()
+    activate Trabajador
+    return True
+    
+    alt trabajador apto
+        TrabServ -> Trabajador: get_tareas()
+        activate Trabajador
+        return tareas (inmutable)
+        
+        TrabServ -> TrabServ: crear copia mutable
+        TrabServ -> TrabServ: ordenar por ID descendente
+        note right
+            Usa método estático
+            _obtener_id_tarea()
+            en lugar de lambda
+        end note
+        
+        loop por cada tarea con fecha = hoy
+            TrabServ -> Trabajador: tarea.set_estado(True)
+            activate Trabajador
+            return
+            note right
+                Imprime: "El trabajador [nombre]
+                realizó la tarea [id]..."
+            end note
+        end
+        return True
+    else trabajador no apto
+        return False
+        note right
+            Imprime: "Trabajador no puede
+            trabajar - apto inválido"
+        end note
+    end
+end
+
+' ===== FASE 7: OPERACIONES DE FINCAS =====
+group #LightSalmon Operaciones de Fincas (Fumigación y Cosecha con Generics)
+    Main -> FincasServ: add_finca(registro)
+    activate FincasServ
+    FincasServ -> FincasServ: fincas[id_padron] = registro
+    return
+    
+    Main -> FincasServ: fumigar(1, "insecticida orgánico")
+    activate FincasServ
+    loop por cada cultivo en plantacion
+        FincasServ -> Registry: mostrar_datos(cultivo)
+        activate Registry
+        Registry -> PinoServ: mostrar_datos(pino)
+        activate PinoServ
+        note right
+            Registry Pattern:
+            Despacha a servicio
+            específico del cultivo
+        end note
+        return
+        return
+    end
+    return
+    
+    Main -> FincasServ: cosechar_yempaquetar(Lechuga)
+    activate FincasServ
+    note right of FincasServ
+        <b>Generics</b>
+        Type-safe con bounded type:
+        Paquete[T] where T: Cultivo
+    end note
+    
+    FincasServ -> FincasServ: new Paquete[Lechuga]()
+    
+    loop por cada cultivo en plantacion
+        alt cultivo es Lechuga
+            FincasServ -> FincasServ: paquete.add_item(lechuga)
+        end
+    end
+    
+    FincasServ -> PlantServ: consumir(plantacion, Lechuga)
+    activate PlantServ
+    PlantServ -> Plantacion: get_cultivos_interno().remove(lechuga)
+    activate Plantacion
+    return
+    return True
+    
+    return Paquete[Lechuga]
+    
+    Main -> FincasServ: paquete.mostrar_contenido_caja()
+    activate FincasServ
+    return
+end
+
+' ===== FASE 8: PERSISTENCIA =====
+group #LightGoldenRodYellow Persistencia en Disco (Pickle)
+    Main -> RegServ: persistir(registro)
+    activate RegServ
+    RegServ -> RegServ: crear directorio data/ si no existe
+    RegServ -> RegServ: open("data/Juan Perez.dat", "wb")
+    
+    alt persistencia exitosa
+        RegServ -> RegServ: pickle.dump(registro, file)
+        note right
+            <b>Serialización de:</b>
+            - RegistroForestal
+            - Tierra
+            - Plantacion
+            - Cultivos
+            - Trabajadores
+            - AptoMedico
+        end note
+        RegServ -> RegServ: close file (finally)
+        return
+    else error de I/O
+        RegServ --> Main: raise PersistenciaException
+        note right
+            Excepción con:
+            - tipo_operacion (ESCRITURA)
+            - nombre_archivo
+            - causa raíz
+        end note
+    end
+    
+    Main -> RegServ: leer_registro("Juan Perez")
+    activate RegServ
+    RegServ -> RegServ: open("data/Juan Perez.dat", "rb")
+    
+    alt lectura exitosa
+        RegServ -> RegServ: pickle.load(file)
+        RegServ -> RegServ: close file (finally)
+        return registro
+    else archivo no encontrado
+        RegServ --> Main: raise PersistenciaException(ERROR 05)
+    else error de deserialización
+        RegServ --> Main: raise PersistenciaException(ERROR 07)
+    end
+    
+    Main -> RegServ: mostrar_datos(registro)
+    activate RegServ
+    loop por cada cultivo
+        RegServ -> Registry: mostrar_datos(cultivo)
+        activate Registry
+        return
+    end
+    return
+end
+
+' ===== FASE 9: DETENCIÓN DEL SISTEMA =====
+group #LightSteelBlue Detención Graceful del Sistema de Riego
+    Main -> Main: time.sleep(20)
+    
+    Main -> TempTask: detener()
+    activate TempTask
+    TempTask -> TempTask: _detenido.set()
+    return
+    
+    Main -> HumTask: detener()
+    activate HumTask
+    HumTask -> HumTask: _detenido.set()
+    return
+    
+    Main -> ControlTask: detener()
+    activate ControlTask
+    ControlTask -> ControlTask: _detenido.set()
+    return
+    
+    Main -> TempTask: join(timeout=2.0)
+    activate TempTask
+    note right
+        Graceful shutdown con
+        threading.Event
+        Timeout configurable
+    end note
+    return
+    
+    Main -> HumTask: join(timeout=2.0)
+    activate HumTask
+    return
+    
+    Main -> ControlTask: join(timeout=2.0)
+    activate ControlTask
+    return
+end
+
+Main --> Usuario: Programa completado exitosamente
+deactivate Main
+
+note over Main
+    <b>Manejo de Excepciones:</b>
+    - SuperficieInsuficienteException
+    - AguaAgotadaException
+    - PersistenciaException
+    - ValueError (validaciones)
+    Orden: específico → general
+end note
+
+note over Registry
+    <b>Patrones Implementados:</b>
+    ✓ SINGLETON - CultivoServiceRegistry
+    ✓ FACTORY METHOD - CultivoFactory
+    ✓ OBSERVER - Sensores y eventos
+    ✓ STRATEGY - Absorción de agua
+    ✓ REGISTRY - Dispatch polimórfico
+end note
+
+@enduml
